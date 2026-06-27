@@ -23,6 +23,7 @@ jobs:
         component: [kube-apiserver, kube-controller-manager, kube-scheduler, kube-proxy]
         namespace: [upstream-k8s, lts-k8s-opus48]
     steps:
+      - uses: actions/checkout@v4   # for security/vex.openvex.json
       - name: Resolve latest tag for ${{ matrix.namespace }}/${{ matrix.component }}
         id: latest
         env:
@@ -69,7 +70,8 @@ jobs:
           ref="ghcr.io/oleksandr-minakov/${{ matrix.namespace }}/${{ matrix.component }}:${{ steps.latest.outputs.tag }}"
           # registry: forces a pull from ghcr (no local daemon in this job)
           syft "registry:$ref" -o cyclonedx-json=sbom.cdx.json
-          grype "sbom:sbom.cdx.json" -o "sarif=grype.sarif"
+          # Apply VEX so govulncheck-confirmed not_affected findings are suppressed.
+          grype "sbom:sbom.cdx.json" --vex security/vex.openvex.json -o "sarif=grype.sarif"
 
       - name: Upload SARIF
         if: steps.latest.outputs.found == 'true'
