@@ -77,7 +77,7 @@ jobs:
             --service-account-key-file="$D/sa.pub" \
             --service-account-signing-key-file="$D/sa.key" \
             --service-cluster-ip-range=10.0.0.0/24 \
-            --authorization-mode=AlwaysAllow \
+            --authorization-mode=RBAC --anonymous-auth=true \
             --cert-dir="$D/pki" --secure-port=6443 \
             --bind-address=127.0.0.1 --advertise-address=127.0.0.1 \
             --endpoint-reconciler-type=none >/dev/null
