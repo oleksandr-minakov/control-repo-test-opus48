@@ -74,7 +74,10 @@ jobs:
             --service-account-signing-key-file="$D/sa.key" \
             --authorization-mode=AlwaysAllow \
             --cert-dir="$D/pki" --secure-port=6443 \
-            --bind-address=127.0.0.1 --advertise-address=127.0.0.1 >/dev/null
+            --bind-address=127.0.0.1 --advertise-address=127.0.0.1 \
+            --endpoint-reconciler-type=none >/dev/null
+          # ^ disable the kubernetes-service endpoint reconciler: a loopback
+          #   advertise-address fails its validation and would stall /livez.
           ok=""
           for i in $(seq 1 40); do
             if curl -ksf https://127.0.0.1:6443/livez >/dev/null 2>&1; then ok=1; break; fi
