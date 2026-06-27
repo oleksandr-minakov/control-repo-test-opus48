@@ -30,13 +30,15 @@ jobs:
         run: |
           set -euo pipefail
           pkg="${{ matrix.namespace }}%2F${{ matrix.component }}"
-          # newest version that has a non-candidate tag, then that tag
+          # newest version carrying a "real" tag (exclude candidate-* build tags
+          # and cosign sha256-*.sig/.att artifact tags), then that tag.
           tag="$(gh api "/users/oleksandr-minakov/packages/container/${pkg}/versions" \
                   --jq '[.[] | select(.metadata.container.tags
-                                      | map(select(startswith("candidate-") | not)) | length > 0)]
+                                      | map(select((startswith("candidate-") or startswith("sha256-")) | not))
+                                      | length > 0)]
                         | sort_by(.created_at) | last
                         | .metadata.container.tags
-                        | map(select(startswith("candidate-") | not)) | .[0]' 2>/dev/null || true)"
+                        | map(select((startswith("candidate-") or startswith("sha256-")) | not)) | .[0]' 2>/dev/null || true)"
           if [ -z "${tag:-}" ] || [ "$tag" = "null" ]; then
             echo "no published image for ${{ matrix.namespace }}/${{ matrix.component }} yet — skipping"
             echo "found=false" >> "$GITHUB_OUTPUT"
@@ -65,7 +67,8 @@ jobs:
         run: |
           set -euo pipefail
           ref="ghcr.io/oleksandr-minakov/${{ matrix.namespace }}/${{ matrix.component }}:${{ steps.latest.outputs.tag }}"
-          syft "$ref" -o cyclonedx-json=sbom.cdx.json
+          # registry: forces a pull from ghcr (no local daemon in this job)
+          syft "registry:$ref" -o cyclonedx-json=sbom.cdx.json
           grype "sbom:sbom.cdx.json" -o "sarif=grype.sarif"
 
       - name: Upload SARIF
