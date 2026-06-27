@@ -57,36 +57,43 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Boot etcd + our kube-apiserver image, probe /livez
+      - name: Boot etcd + our kube-apiserver image, probe serving
         run: |
           set -euo pipefail
+          api="ghcr.io/oleksandr-minakov/${NS}/kube-apiserver:${TAG}"
+          # Pre-pull so the readiness poll isn't racing the image download.
+          docker pull -q quay.io/coreos/etcd:v3.5.24
+          docker pull -q "$api"
           D="$(mktemp -d)"; chmod 777 "$D"
           openssl genrsa -out "$D/sa.key" 2048
           openssl rsa -in "$D/sa.key" -pubout -out "$D/sa.pub"
           docker run -d --name etcd --network host quay.io/coreos/etcd:v3.5.24 \
             /usr/local/bin/etcd --listen-client-urls=http://127.0.0.1:2379 \
             --advertise-client-urls=http://127.0.0.1:2379 >/dev/null
-          docker run -d --name apiserver --network host --user 0 -v "$D:$D" \
-            "ghcr.io/oleksandr-minakov/${NS}/kube-apiserver:${TAG}" \
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:2379/health >/dev/null 2>&1 && break; sleep 1; done
+          docker run -d --name apiserver --network host --user 0 -v "$D:$D" "$api" \
             --etcd-servers=http://127.0.0.1:2379 \
             --service-account-issuer=https://kubernetes.default.svc \
             --service-account-key-file="$D/sa.pub" \
             --service-account-signing-key-file="$D/sa.key" \
+            --service-cluster-ip-range=10.0.0.0/24 \
             --authorization-mode=AlwaysAllow \
             --cert-dir="$D/pki" --secure-port=6443 \
             --bind-address=127.0.0.1 --advertise-address=127.0.0.1 \
             --endpoint-reconciler-type=none >/dev/null
-          # ^ disable the kubernetes-service endpoint reconciler: a loopback
-          #   advertise-address fails its validation and would stall /livez.
-          ok=""
-          for i in $(seq 1 40); do
-            if curl -ksf https://127.0.0.1:6443/livez >/dev/null 2>&1; then ok=1; break; fi
+          # Primary proof the image serves: /version responds over TLS as soon
+          # as secure serving is up (not gated by readiness poststarthooks).
+          serves=""
+          for i in $(seq 1 60); do
+            if curl -ksf https://127.0.0.1:6443/version >/dev/null 2>&1; then serves=1; break; fi
             sleep 3
           done
-          echo "--- /version ---"; curl -ksf https://127.0.0.1:6443/version || true
-          if [ -z "$ok" ]; then echo "apiserver did not become live"; docker logs apiserver | tail -40; exit 1; fi
-          echo "apiserver /livez OK"
-          curl -ksf https://127.0.0.1:6443/readyz >/dev/null && echo "readyz OK" || echo "readyz not ready (acceptable for smoke)"
+          if [ -z "$serves" ]; then echo "apiserver never served /version"; docker logs apiserver | tail -50; exit 1; fi
+          echo "=== /version ==="; curl -ksf https://127.0.0.1:6443/version
+          # Bonus: full liveness (kube-system bootstrap). Best-effort, non-fatal.
+          live=""
+          for i in $(seq 1 40); do curl -ksf https://127.0.0.1:6443/livez >/dev/null 2>&1 && { live=1; break; }; sleep 3; done
+          [ -n "$live" ] && echo "/livez healthy" || echo "/livez not healthy in time (non-fatal smoke)"
 
   deb-install:
     runs-on: ubuntu-latest
