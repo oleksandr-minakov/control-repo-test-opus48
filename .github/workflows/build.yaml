@@ -1,0 +1,193 @@
+name: build
+
+# Dual-source dispatcher.
+#
+#   Path A (vanilla) : manual dispatch, mode=vanilla, source_ref=<upstream tag>
+#                      -> kubernetes/kubernetes -> ghcr .../upstream-k8s/...
+#   Path B (lts)     : automatic on push to release-* changing VERSION (and the
+#                      default mode for manual dispatch)
+#                      -> oleksandr-minakov/k8s-test-opus48 -> ghcr .../lts-k8s/...
+#
+# Both paths share build.sh; only source repo, namespace and artifact prefix
+# differ, and the resolve job below computes all three.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "lts (fork, patched) or vanilla (upstream rebuild)"
+        type: choice
+        options: [lts, vanilla]
+        default: lts
+      source_ref:
+        description: "source ref/tag (required for vanilla; overrides VERSION for lts)"
+        type: string
+        required: false
+  push:
+    branches: ['release-*']
+    paths: [VERSION]
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write          # cosign keyless (OIDC)
+  security-events: write   # grype SARIF upload
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      source_repo:     ${{ steps.r.outputs.source_repo }}
+      source_ref:      ${{ steps.r.outputs.source_ref }}
+      namespace:       ${{ steps.r.outputs.namespace }}
+      artifact_prefix: ${{ steps.r.outputs.artifact_prefix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: r
+        env:
+          MODE: ${{ github.event.inputs.mode || 'lts' }}
+          SRC_REF: ${{ github.event.inputs.source_ref }}
+        run: |
+          set -euo pipefail
+          case "${MODE}" in
+            lts)
+              [[ -f VERSION ]] || { echo "VERSION missing"; exit 1; }
+              ref="${SRC_REF:-$(tr -d '[:space:]' < VERSION)}"
+              echo "source_repo=oleksandr-minakov/k8s-test-opus48" >> "$GITHUB_OUTPUT"
+              echo "namespace=lts-k8s"                             >> "$GITHUB_OUTPUT"
+              echo "artifact_prefix=lts-deb"                       >> "$GITHUB_OUTPUT"
+              ;;
+            vanilla)
+              [[ -n "${SRC_REF}" ]] || { echo "source_ref required for mode=vanilla"; exit 1; }
+              ref="${SRC_REF}"
+              [[ "${ref}" == v* ]] || ref="v${ref}"
+              echo "source_repo=kubernetes/kubernetes"            >> "$GITHUB_OUTPUT"
+              echo "namespace=upstream-k8s"                       >> "$GITHUB_OUTPUT"
+              echo "artifact_prefix=upstream-deb"                 >> "$GITHUB_OUTPUT"
+              ;;
+            *) echo "unknown mode: ${MODE}"; exit 1 ;;
+          esac
+          echo "source_ref=${ref}" >> "$GITHUB_OUTPUT"
+          echo "resolved: mode=${MODE} ref=${ref}"
+
+  build:
+    needs: resolve
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: kube-apiserver,          kind: image, base: "gcr.io/distroless/static-debian12:nonroot" }
+          - { name: kube-controller-manager, kind: image, base: "gcr.io/distroless/static-debian12:nonroot" }
+          - { name: kube-scheduler,          kind: image, base: "gcr.io/distroless/static-debian12:nonroot" }
+          - { name: kube-proxy,              kind: image, base: "registry.k8s.io/build-image/distroless-iptables:v0.6.7" }
+          - { name: kubelet,                 kind: deb }
+          - { name: kubectl,                 kind: deb }
+    env:
+      GOFLAGS: -mod=vendor -trimpath -buildvcs=false
+      GOPROXY: off
+      GOSUMDB: off
+      GOTOOLCHAIN: local
+      NS:  ${{ needs.resolve.outputs.namespace }}
+      TAG: ${{ needs.resolve.outputs.source_ref }}
+    steps:
+      - name: Checkout build repo
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - name: Checkout source (${{ needs.resolve.outputs.source_repo }}@${{ needs.resolve.outputs.source_ref }})
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ needs.resolve.outputs.source_repo }}
+          ref: ${{ needs.resolve.outputs.source_ref }}
+          path: src
+          fetch-depth: 1
+
+      - name: Pin Go toolchain
+        run: |
+          [ -f src/.go-version ] || echo "1.24.13" > src/.go-version
+          echo "using go $(cat src/.go-version)"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/.go-version
+          cache: false
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build ${{ matrix.name }} (${{ matrix.kind }})
+        env:
+          IMAGE_SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.kind }}" = "image" ]; then
+            ./build.sh \
+              --component "${{ matrix.name }}" --kind image --tag "$TAG" \
+              --registry-path "ghcr.io/oleksandr-minakov/${NS}/${{ matrix.name }}" \
+              --base-image "${{ matrix.base }}" --source-dir src
+          else
+            ./build.sh \
+              --component "${{ matrix.name }}" --kind deb --tag "$TAG" --source-dir src
+          fi
+
+      - name: Install syft & grype
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh  | sh -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: SBOM (image)
+        if: matrix.kind == 'image'
+        run: syft "ghcr.io/oleksandr-minakov/${NS}/${{ matrix.name }}:${TAG}" -o cyclonedx-json=sbom.cdx.json
+
+      - name: SBOM (deb)
+        if: matrix.kind == 'deb'
+        run: syft dist -o cyclonedx-json=sbom.cdx.json
+
+      - name: Vuln scan (Grype -> SARIF)
+        run: grype "sbom:sbom.cdx.json" -o "sarif=grype-${{ matrix.name }}.sarif"
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: grype-${{ matrix.name }}.sarif
+          category: build-${{ needs.resolve.outputs.namespace }}-${{ matrix.name }}
+
+      - name: Sign + attest image (keyless)
+        if: matrix.kind == 'image'
+        run: |
+          set -euo pipefail
+          DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' \
+            "ghcr.io/oleksandr-minakov/${NS}/${{ matrix.name }}:${TAG}")"
+          echo "signing $DIGEST"
+          cosign sign --yes "$DIGEST"
+          cosign attest --yes --type cyclonedx --predicate sbom.cdx.json "$DIGEST"
+
+      - name: Sign deb (keyless, detached bundle)
+        if: matrix.kind == 'deb'
+        run: |
+          set -euo pipefail
+          for f in dist/*.deb; do
+            cosign sign-blob --yes --bundle "${f}.cosign.bundle" "$f"
+          done
+          ls -l dist/
+
+      - name: Upload deb artifact
+        if: matrix.kind == 'deb'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.resolve.outputs.artifact_prefix }}-${{ matrix.name }}
+          path: |
+            dist/*.deb
+            dist/*.cosign.bundle
+            sbom.cdx.json
