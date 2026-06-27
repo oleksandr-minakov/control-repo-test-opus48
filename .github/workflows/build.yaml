@@ -154,15 +154,7 @@ jobs:
         if: matrix.kind == 'deb'
         run: syft dist -o cyclonedx-json=sbom.cdx.json
 
-      - name: Vuln scan (Grype -> SARIF)
-        run: grype "sbom:sbom.cdx.json" -o "sarif=grype-${{ matrix.name }}.sarif"
-
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: grype-${{ matrix.name }}.sarif
-          category: build-${{ needs.resolve.outputs.namespace }}-${{ matrix.name }}
-
+      # Sign BEFORE scanning so a finicky SARIF upload can never skip signing.
       - name: Sign + attest image (keyless)
         if: matrix.kind == 'image'
         run: |
@@ -181,6 +173,19 @@ jobs:
             cosign sign-blob --yes --bundle "${f}.cosign.bundle" "$f"
           done
           ls -l dist/
+
+      - name: Vuln scan (Grype -> SARIF)
+        run: grype "sbom:sbom.cdx.json" -o "sarif=grype-${{ matrix.name }}.sarif"
+
+      # Best-effort: CodeQL rejects OS-package results whose location is not a
+      # file path (e.g. distroless-iptables base). Scanning still runs; this
+      # ingestion never fails the build.
+      - name: Upload SARIF
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: grype-${{ matrix.name }}.sarif
+          category: build-${{ needs.resolve.outputs.namespace }}-${{ matrix.name }}
 
       - name: Upload deb artifact
         if: matrix.kind == 'deb'

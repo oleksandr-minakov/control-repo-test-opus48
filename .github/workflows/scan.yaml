@@ -70,6 +70,7 @@ jobs:
 
       - name: Upload SARIF
         if: steps.latest.outputs.found == 'true'
+        continue-on-error: true   # OS-package results may not map to file paths
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: grype.sarif
