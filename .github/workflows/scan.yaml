@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         component: [kube-apiserver, kube-controller-manager, kube-scheduler, kube-proxy]
-        namespace: [upstream-k8s, lts-k8s]
+        namespace: [upstream-k8s, lts-k8s-opus48]
     steps:
       - name: Resolve latest tag for ${{ matrix.namespace }}/${{ matrix.component }}
         id: latest

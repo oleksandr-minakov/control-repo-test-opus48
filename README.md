@@ -24,7 +24,7 @@ source repo, the ghcr namespace, and the artifact prefix from `(event, mode)`:
                           │                                ── build.sh ──► │ 6 components  │  │
   Path B · LTS            │  mode=lts (default)                            │ ×{image,deb} │  │
   push VERSION on  ───────┼─►  source=oleksandr-minakov/k8s-test-opus48@$(VERSION)           │
-  release-1.32            │    ns=lts-k8s   prefix=lts-deb                 └──────┬───────┘  │
+  release-1.32            │    ns=lts-k8s-opus48   prefix=lts-deb                 └──────┬───────┘  │
                           └────────────────────────────────────────────────────┼──────────┘
                                                                                  │
             images ─► ghcr.io/oleksandr-minakov/<namespace>/<component>:<tag>    │
@@ -36,12 +36,12 @@ source repo, the ghcr namespace, and the artifact prefix from `(event, mode)`:
 |---|---|---|
 | Trigger | `workflow_dispatch -F mode=vanilla -F source_ref=<tag>` | push to `release-*` changing `VERSION` (or `-F mode=lts`) |
 | Source repo | `kubernetes/kubernetes` | `oleksandr-minakov/k8s-test-opus48` (fork) |
-| ghcr namespace | `upstream-k8s` | `lts-k8s` |
+| ghcr namespace | `upstream-k8s` | `lts-k8s-opus48` |
 | Deb artifact prefix | `upstream-deb-<component>` | `lts-deb-<component>` |
 | Patches | none (reproducible stock rebuild) | Mirantis LTS cherry-picks |
 
 The two namespaces never collide, so stock and patched artifacts for the same
-upstream version coexist (`upstream-k8s/...:v1.32.13` vs `lts-k8s/...:v1.32.13-lts.0`).
+upstream version coexist (`upstream-k8s/...:v1.32.13` vs `lts-k8s-opus48/...:v1.32.13-lts.0`).
 
 ## Usage
 

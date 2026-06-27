@@ -53,7 +53,7 @@ jobs:
               [[ -f VERSION ]] || { echo "VERSION missing"; exit 1; }
               ref="${SRC_REF:-$(tr -d '[:space:]' < VERSION)}"
               echo "source_repo=oleksandr-minakov/k8s-test-opus48" >> "$GITHUB_OUTPUT"
-              echo "namespace=lts-k8s"                             >> "$GITHUB_OUTPUT"
+              echo "namespace=lts-k8s-opus48"                      >> "$GITHUB_OUTPUT"
               echo "artifact_prefix=lts-deb"                       >> "$GITHUB_OUTPUT"
               ;;
             vanilla)
