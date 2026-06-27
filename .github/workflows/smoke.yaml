@@ -1,0 +1,107 @@
+name: smoke
+
+# Post-build artifact smoke for a published LTS tag. Validates that the actual
+# built artifacts run/serve/install — coverage that source unit+integration
+# tests cannot give (they test source, not the distroless images and debs).
+#
+#   image-run        - each distroless image executes and reports its version
+#   apiserver-serves - our kube-apiserver image serves /livez against real etcd
+#   deb-install      - kubelet/kubectl debs install and run on a clean Ubuntu
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "image tag / deb version to smoke (e.g. v1.32.13-lts.2)"
+        type: string
+        required: true
+      namespace:
+        description: "ghcr namespace"
+        type: string
+        default: lts-k8s-opus48
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+
+env:
+  NS: ${{ github.event.inputs.namespace }}
+  TAG: ${{ github.event.inputs.tag }}
+
+jobs:
+  image-run:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [kube-apiserver, kube-controller-manager, kube-scheduler, kube-proxy]
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: ${{ matrix.component }} --version
+        run: |
+          set -euo pipefail
+          ref="ghcr.io/oleksandr-minakov/${NS}/${{ matrix.component }}:${TAG}"
+          out="$(docker run --rm "$ref" --version)"
+          echo "$out"
+          echo "$out" | grep -q . || { echo "no version output"; exit 1; }
+
+  apiserver-serves:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Boot etcd + our kube-apiserver image, probe /livez
+        run: |
+          set -euo pipefail
+          D="$(mktemp -d)"; chmod 777 "$D"
+          openssl genrsa -out "$D/sa.key" 2048
+          openssl rsa -in "$D/sa.key" -pubout -out "$D/sa.pub"
+          docker run -d --name etcd --network host quay.io/coreos/etcd:v3.5.24 \
+            /usr/local/bin/etcd --listen-client-urls=http://127.0.0.1:2379 \
+            --advertise-client-urls=http://127.0.0.1:2379 >/dev/null
+          docker run -d --name apiserver --network host --user 0 -v "$D:$D" \
+            "ghcr.io/oleksandr-minakov/${NS}/kube-apiserver:${TAG}" \
+            --etcd-servers=http://127.0.0.1:2379 \
+            --service-account-issuer=https://kubernetes.default.svc \
+            --service-account-key-file="$D/sa.pub" \
+            --service-account-signing-key-file="$D/sa.key" \
+            --authorization-mode=AlwaysAllow \
+            --cert-dir="$D/pki" --secure-port=6443 \
+            --bind-address=127.0.0.1 --advertise-address=127.0.0.1 >/dev/null
+          ok=""
+          for i in $(seq 1 40); do
+            if curl -ksf https://127.0.0.1:6443/livez >/dev/null 2>&1; then ok=1; break; fi
+            sleep 3
+          done
+          echo "--- /version ---"; curl -ksf https://127.0.0.1:6443/version || true
+          if [ -z "$ok" ]; then echo "apiserver did not become live"; docker logs apiserver | tail -40; exit 1; fi
+          echo "apiserver /livez OK"
+          curl -ksf https://127.0.0.1:6443/readyz >/dev/null && echo "readyz OK" || echo "readyz not ready (acceptable for smoke)"
+
+  deb-install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download latest LTS deb artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rid="$(gh run list --repo "${{ github.repository }}" --workflow build.yaml \
+                  --branch release-1.32 --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          echo "downloading debs from build run $rid"
+          gh run download "$rid" --repo "${{ github.repository }}" --pattern 'lts-deb-*' -D debs
+          find debs -name '*.deb'
+      - name: Install + run kubelet/kubectl
+        run: |
+          set -euo pipefail
+          sudo dpkg -i "$(find debs -name 'kubectl_*.deb' | head -1)" || sudo apt-get -f install -y
+          sudo dpkg -i "$(find debs -name 'kubelet_*.deb' | head -1)" || sudo apt-get -f install -y
+          kubectl version --client
+          kubelet --version
