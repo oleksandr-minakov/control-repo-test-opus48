@@ -8,47 +8,288 @@
   "tooling": "govulncheck (binary mode) + grype",
   "statements": [
     {
-      "vulnerability": { "name": "CVE-2026-24051", "aliases": ["GO-2026-4394"] },
+      "vulnerability": {
+        "name": "CVE-2026-24051",
+        "aliases": [
+          "GO-2026-4394"
+        ]
+      },
       "products": [
-        "pkg:oci/kube-apiserver?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48",
-        "pkg:oci/kube-controller-manager?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48",
-        "pkg:oci/kube-scheduler?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48",
-        "pkg:oci/kube-proxy?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48",
-        "pkg:deb/kubelet"
+        {
+          "@id": "pkg:oci/kube-apiserver?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48"
+        },
+        {
+          "@id": "pkg:oci/kube-controller-manager?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48"
+        },
+        {
+          "@id": "pkg:oci/kube-scheduler?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48"
+        },
+        {
+          "@id": "pkg:oci/kube-proxy?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48"
+        },
+        {
+          "@id": "pkg:deb/kubelet"
+        }
       ],
       "status": "affected",
       "action_statement": "Deferred on the 1.32 LTS line. The fix (go.opentelemetry.io/otel/sdk >= 1.40) transitively pulls github.com/cyphar/filepath-securejoin v0.6.0, which removes the top-level MkdirAllHandle that vendored runc v1.2.1 requires, breaking the build. Exploitation requires OpenTelemetry tracing to be explicitly enabled (off by default) AND adversary control of the process PATH. Mitigate by leaving tracing disabled and not running components with an attacker-influenced PATH. Will be fixed when the LTS line moves to a runc release compatible with the new securejoin API."
     },
     {
-      "vulnerability": { "name": "CVE-2025-52881", "aliases": ["GO-2025-4098"] },
+      "vulnerability": {
+        "name": "CVE-2025-52881",
+        "aliases": [
+          "GO-2025-4098"
+        ]
+      },
       "products": [
-        "pkg:oci/kube-apiserver?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48",
-        "pkg:oci/kube-controller-manager?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48",
-        "pkg:oci/kube-proxy?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48",
-        "pkg:deb/kubelet"
+        {
+          "@id": "pkg:oci/kube-apiserver?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48"
+        },
+        {
+          "@id": "pkg:oci/kube-controller-manager?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48"
+        },
+        {
+          "@id": "pkg:oci/kube-proxy?repository_url=ghcr.io/oleksandr-minakov/lts-k8s-opus48"
+        },
+        {
+          "@id": "pkg:deb/kubelet"
+        }
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_in_execute_path",
-      "impact_statement": "This is a container-escape via procfs write redirection that occurs in the runc that actually creates containers. Kubernetes components vendor opencontainers/runc and selinux only for label/constant computation; they do not spawn containers from the vendored copy — the node's container runtime (containerd/CRI-O + its own runc) is the affected component and is patched independently at the node level. govulncheck flags the shared symbol as present, but the container-creation path that triggers the bug is not exercised by these binaries."
+      "impact_statement": "This is a container-escape via procfs write redirection that occurs in the runc that actually creates containers. Kubernetes components vendor opencontainers/runc and selinux only for label/constant computation; they do not spawn containers from the vendored copy \u2014 the node's container runtime (containerd/CRI-O + its own runc) is the affected component and is patched independently at the node level. govulncheck flags the shared symbol as present, but the container-creation path that triggers the bug is not exercised by these binaries."
     },
-
-    { "vulnerability": { "name": "GO-2026-5005", "aliases": ["x/crypto"] }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "govulncheck (binary mode) confirms no reachable symbol. x/crypto is bumped to 0.51.0 via lts.3; the residual 0.52.0 advisories cover SSH/OpenPGP/agent code paths not compiled into these components." },
-    { "vulnerability": { "name": "GO-2026-5006" }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "x/crypto path not reachable (govulncheck)." },
-    { "vulnerability": { "name": "GO-2026-5013" }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "x/crypto path not reachable (govulncheck)." },
-    { "vulnerability": { "name": "GO-2026-5017" }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "x/crypto path not reachable (govulncheck)." },
-    { "vulnerability": { "name": "GO-2026-5018" }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "x/crypto path not reachable (govulncheck)." },
-    { "vulnerability": { "name": "GO-2026-5019" }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "x/crypto path not reachable (govulncheck)." },
-    { "vulnerability": { "name": "GO-2026-5020" }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "x/crypto path not reachable (govulncheck)." },
-    { "vulnerability": { "name": "GO-2026-5021" }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "x/crypto path not reachable (govulncheck)." },
-    { "vulnerability": { "name": "GO-2026-5023" }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "x/crypto path not reachable (govulncheck)." },
-
-    { "vulnerability": { "name": "GHSA-9493-h29p-rfm2", "aliases": ["opencontainers/runc"] }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "Vendored runc libraries are used for types/labels only; container execution uses the node runtime's runc. No reachable symbol (govulncheck)." },
-    { "vulnerability": { "name": "GHSA-qw9x-cqr3-wc7r", "aliases": ["opencontainers/runc"] }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "Vendored runc libraries only; not reachable (govulncheck)." },
-    { "vulnerability": { "name": "GHSA-cgrx-mc8f-2prm", "aliases": ["opencontainers/selinux"] }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "Not reachable (govulncheck)." },
-
-    { "vulnerability": { "name": "GHSA-9h8m-3fm2-qjrq", "aliases": ["otel/sdk"] }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "OpenTelemetry exporter path not reachable (govulncheck); tracing is disabled by default." },
-    { "vulnerability": { "name": "GHSA-hfvc-g4fc-pqhx", "aliases": ["otel/sdk"] }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "Not reachable (govulncheck); tracing disabled by default." },
-    { "vulnerability": { "name": "GHSA-mh2q-q3fh-2475", "aliases": ["otel"] }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "Not reachable (govulncheck); tracing disabled by default." },
-    { "vulnerability": { "name": "GHSA-rcjv-mgp8-qvmr", "aliases": ["otelrestful"] }, "products": ["pkg:generic/lts-k8s-opus48"], "status": "not_affected", "justification": "vulnerable_code_not_in_execute_path", "impact_statement": "go-restful otel instrumentation not reachable (govulncheck)." }
+    {
+      "vulnerability": {
+        "name": "GO-2026-5005",
+        "aliases": [
+          "x/crypto"
+        ]
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "govulncheck (binary mode) confirms no reachable symbol. x/crypto is bumped to 0.51.0 via lts.3; the residual 0.52.0 advisories cover SSH/OpenPGP/agent code paths not compiled into these components."
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2026-5006"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "x/crypto path not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2026-5013"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "x/crypto path not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2026-5017"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "x/crypto path not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2026-5018"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "x/crypto path not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2026-5019"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "x/crypto path not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2026-5020"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "x/crypto path not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2026-5021"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "x/crypto path not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2026-5023"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "x/crypto path not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-9493-h29p-rfm2",
+        "aliases": [
+          "opencontainers/runc"
+        ]
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Vendored runc libraries are used for types/labels only; container execution uses the node runtime's runc. No reachable symbol (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-qw9x-cqr3-wc7r",
+        "aliases": [
+          "opencontainers/runc"
+        ]
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Vendored runc libraries only; not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-cgrx-mc8f-2prm",
+        "aliases": [
+          "opencontainers/selinux"
+        ]
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Not reachable (govulncheck)."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-9h8m-3fm2-qjrq",
+        "aliases": [
+          "otel/sdk"
+        ]
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "OpenTelemetry exporter path not reachable (govulncheck); tracing is disabled by default."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-hfvc-g4fc-pqhx",
+        "aliases": [
+          "otel/sdk"
+        ]
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Not reachable (govulncheck); tracing disabled by default."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-mh2q-q3fh-2475",
+        "aliases": [
+          "otel"
+        ]
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Not reachable (govulncheck); tracing disabled by default."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-rcjv-mgp8-qvmr",
+        "aliases": [
+          "otelrestful"
+        ]
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/lts-k8s-opus48"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "go-restful otel instrumentation not reachable (govulncheck)."
+    }
   ]
 }
